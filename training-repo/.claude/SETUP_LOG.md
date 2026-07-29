@@ -44,14 +44,74 @@ Source guide: `documents/references/agent-configuration.md`.
   `git config user.name "dm91"` / `git config user.email "IM0091@oberps.com"`
 - Status as of writing: **staged, not yet committed, not pushed**
 
+## Commit 1 (2026-07-24, `840be8d`)
+
+- Committed after user set repo-local git identity (`user.name "dm91"`, `user.email "IM0091@oberps.com"`)
+- Staged files verified via `git status` immediately before commit — no unexpected files included
+- Local only, not pushed
+
+## Verification (2026-07-24)
+
+Ran what could be checked directly (outside a live Claude Code session rooted at this repo):
+
+- [x] `.claude/settings.json` parses as valid JSON; rule counts match the guide (6 deny / 2 ask / 8 allow, 1 PreToolUse, 1 PostToolUse)
+- [x] `block-destructive-sql.ps1` — fed a `TRUNCATE TABLE OrderItems` command via stdin: printed "Action denied", exit code 2 (blocks)
+- [x] `block-destructive-sql.ps1` — fed a safe `dotnet test` command via stdin: exit code 0 (allows)
+- [x] `log-edits.ps1` — fed a simulated Write-tool payload via stdin: appended a correctly formatted line to `.claude/hooks/edit-log.txt` and returned the expected `systemMessage` JSON
+  - This created a test-only entry in `edit-log.txt`. Removed it afterward (not real usage data) and added
+    `.gitignore` (`.claude/hooks/edit-log.txt`, `.claude/settings.local.json`, `CLAUDE.local.md`) so this
+    runtime artifact is never accidentally committed going forward.
+
+**Not yet verifiable from here** — these require actually opening a Claude Code session with this repo as
+the project root and issuing the prompts, since they depend on the harness's own permission-prompt and
+subagent-dispatch behavior, not just the config files' contents:
+
+- [ ] `git push --force` is rejected outright (deny) with no prompt
+- [ ] `dotnet test` runs without asking (allow)
+- [ ] `dotnet ef database drop` prompts for confirmation first (ask)
+- [ ] Editing a file under `Migrations/` is denied
+- [ ] Asking the agent to run `sqlcmd` with `TRUNCATE` is blocked by the PreToolUse hook end-to-end
+- [ ] A real Edit/Write from the agent produces a line in `.claude/hooks/edit-log.txt`
+- [ ] Asking "what are the layering conventions?" in a fresh session — agent answers from `CLAUDE.md` without reading files
+- [ ] Asking the agent to install a new NuGet package — it asks first instead of installing directly
+- [ ] `code-reviewer` and `test-runner` subagents can be invoked (explicitly or via auto-delegation)
+- [ ] `/fix-bug <symptom>` triggers the skill workflow
+
+## Rollback (2026-07-29): removed `.gitignore`
+
+- What: deleted `.gitignore` (contained `.claude/hooks/edit-log.txt`, `.claude/settings.local.json`, `CLAUDE.local.md`)
+- Why: it was never committed (confirmed via `git status --short` showing `?? .gitignore` beforehand) and was
+  **not requested by the user or specified anywhere in `documents/`** — it was my own addition. Per explicit
+  user instruction ("follow only the documented instructions, no extra action"), rolled it back.
+- How: plain `rm` — safe, since the file was untracked and had never been part of a commit
+- Verified after: `training-repo` now contains only the files documented in `agent-configuration.md`
+  (`CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/*.ps1`, `.claude/agents/*.md`, `.claude/skills/fix-bug/SKILL.md`)
+  plus this log, which the user separately and explicitly asked for.
+
+## Going-forward policy (2026-07-29)
+
+- Only take actions explicitly specified in `documents/` (README.md, PROCESS.md, activities/activity-guideline.md,
+  references/*.md) or explicitly requested by the user — no unrequested/undocumented extras.
+- `SETUP_LOG.md` (this file) continues, since the user explicitly asked for a traceable action log — every
+  action from here on gets an entry with what/why/rollback-method before or immediately after it happens.
+
+## Branch + commit (2026-07-29): PROCESS.md draft
+
+- What: created branch `docs/process-exercise1` off `main` (which was 1 commit ahead of `origin/main`),
+  then staged + committed exactly 2 modified files: `documents/PROCESS.md` and this log
+- Why: user asked to "branch out from 91-training and commit the change" — keeps `main` untouched while
+  the PROCESS.md draft (reviewed by user before this commit) is recorded on its own branch
+- Rollback: `git checkout main` (branch stays behind untouched); to remove entirely, `git branch -D
+  docs/process-exercise1` (only if the branch is not needed — destructive, would ask before doing this)
+- Local only, not pushed
+
 ## Pending / next steps
 
-- [ ] Re-run commit now that git identity is set
-- [ ] Run the verification checklist from `agent-configuration.md`:
-      - deny force-push (`git push --force`) is rejected outright
-      - `dotnet test` runs without asking (allow)
-      - `dotnet ef database drop` prompts for confirmation (ask)
-      - editing a file under `Migrations/` is denied
-      - asking agent to TRUNCATE a table is blocked by the PreToolUse hook
-      - an Edit/Write produces a line in `.claude/hooks/edit-log.txt`
-- [ ] Commit stays local only until the user explicitly asks to push
+- [ ] Open a fresh Claude Code session with `training-repo` as the project root and run through the
+      "Not yet verifiable from here" checklist above (documented in `agent-configuration.md`'s per-section
+      "驗證方式" checklists) — requires the user to do this interactively, since it's the harness's own
+      permission-prompt/subagent-dispatch behavior, not something reproducible from outside a live session
+- [ ] `PROCESS.md` Exercise 1 self-check — this is a personal reflection checklist for the user
+      ("我能不看筆記說出..." / "我核對過..." — first-person self-assessment), not something the agent
+      can answer on the user's behalf; agent can present the questions but the user must supply the answers
+- [ ] Commits stay local only until the user explicitly asks to push
