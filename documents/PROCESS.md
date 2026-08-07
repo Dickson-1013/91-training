@@ -72,12 +72,31 @@ Claude Code（claude-sonnet-5）
 
 練習 2
 
-1. 三個 bug 我都先在頁面上重現過，才開始找程式
-2. 我給 agent 的資訊包含具體觀察（頁碼／金額數字／庫存數字），而不是只貼客訴原文
-3. 每個修復都回到頁面驗證過症狀消失
-4. 每個 bug 都補了一個回歸測試，`dotnet test` 全綠
-5. 三個獨立 commit，message 說明症狀與根因
+1. [ ] 三個 bug 我都先在頁面上重現過，才開始找程式
+   - 這次沒有照建議流程：agent 直接根據 `activity-guideline.md` 裡客訴的文字描述往
+     Controller → Service → Repository 追根因，沒有先在頁面上手動重現。你把 app
+     跑起來準備自己操作時，我把佔用 5299 port 的程序關掉讓你手動接手——**這步驟
+     待你自己在頁面上跑一次 3 個重現提示，確認症狀確實消失**
+2. [ ] 我給 agent 的資訊包含具體觀察（頁碼／金額數字／庫存數字），而不是只貼客訴原文
+   - 同上，這次沒有補充具體觀察數字，是直接把三張客訴原文交給 agent 去追
+3. [ ] 每個修復都回到頁面驗證過症狀消失
+   - 尚未做（同第 1 點，待你手動驗證）
+4. [x] 每個 bug 都補了一個回歸測試，`dotnet test` 全綠
+   - 3 個 bug 各補了會先 red 再 green 的回歸測試（`GetOrders_Page1_...`／
+     `GetOrders_LastPage_IsNotEmpty`、`CreateOrder_GoldCustomer_...`x2、
+     `CancelOrder_ActiveOrder_RestoresProductStock`），修復前手動還原程式碼確認過
+     全部先失敗，修復後 `dotnet test` 34/34 全綠
+5. [x] 三個獨立 commit，message 說明症狀與根因
+   - `c574807` 訂單分頁 Skip 算錯頁數、`60ca050` Gold 會員被重複打折、
+     `8d21590` 取消訂單庫存沒還原——三個 commit message 都寫了症狀→根因→修法
 6. （思考題）為什麼原本的測試沒抓到這三個 bug？
+   - 分頁：`GetOrders_ReportsTotalCountAndTotalPages` 只驗證 `TotalCount`／
+     `TotalPages`，沒驗證 `Items` 裡實際是哪幾筆
+   - Gold 折扣：`CalculateTotal_AppliesTierDiscountOnSubtotal` 是手刻一個
+     `OrderItem` 直接呼叫 `CalculateTotal`，繞過了 `CreateOrderAsync` 建立
+     `UnitPriceSnapshot` 的那段邏輯，所以測不到「建單時已經先打過一次折」
+   - 庫存：完全沒有測試在取消訂單後去檢查 `Product.StockQuantity`，
+     只驗證了 `Order.Status` 有沒有變成 Cancelled
 
 練習 3
 
