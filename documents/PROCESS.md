@@ -100,18 +100,43 @@ Claude Code（claude-sonnet-5）
 
 練習 3
 
-1. `/Products/LowStock` 不帶參數 → 門檻 10 的結果；帶 `?threshold=3` → 結果隨之改變
-2. `?threshold=0`、`?threshold=-1` → 頁面顯示驗證錯誤，不是 500
-3. 售出數量欄位排除了 Cancelled 訂單（可用一筆已取消的訂單驗證）
-4. 停售（已停售 badge）商品不出現在列表
-5. 程式分層與命名跟既有的 Products 功能一致（請 agent 自我 review 一次，並自己確認）
-6. 至少 3 個新測試，`dotnet test` 全綠
+1. [ ] `/Products/LowStock` 不帶參數 → 門檻 10 的結果；帶 `?threshold=3` → 結果隨之改變
+   - 程式邏輯已實作（`Threshold` 屬性預設 10、controller 用 model binding 讀
+     query string），但沒有實際在頁面上點過——**待你手動跑一次確認**
+2. [ ] `?threshold=0`、`?threshold=-1` → 頁面顯示驗證錯誤，不是 500
+   - 用 `[Range(1, int.MaxValue)]` 擋，邏輯上會觸發 `ModelState.IsValid == false`
+     回到同一頁顯示錯誤，但同樣沒有實際在頁面上送出過這兩個值——**待你手動驗證**
+3. [x] 售出數量欄位排除了 Cancelled 訂單（可用一筆已取消的訂單驗證）
+   - 用回歸測試驗證的，不是在頁面上點的：
+     `GetLowStock_RecentSoldQuantity_ExcludesCancelledAndOutsideThirtyDayWindow`
+     建了 3 張訂單（30 天內未取消、30 天內已取消、超過 30 天），確認只有第一張
+     的數量 4 被算進去
+4. [x] 停售（已停售 badge）商品不出現在列表
+   - 同上，用測試驗證：`GetLowStock_ExcludesInactiveProducts`
+5. [ ] 程式分層與命名跟既有的 Products 功能一致（請 agent 自我 review 一次，並自己確認）
+   - agent 自我 review 過一次：Controller 只做 model binding／轉 VM，EF 查詢在
+     `ProductRepository`（`GetActiveWithStockBelowAsync`、
+     `GetRecentSoldQuantitiesAsync` 一次查完全部商品的近期銷量、沒有 N+1），
+     View 綁 `LowStockViewModel` 不碰 domain model，命名也照
+     `ProductListViewModel`／`ProductRowViewModel` 的既有風格
+   - 「並自己確認」這半句還是你要親自看一次 diff 才算數，我不能代替你確認
+6. [x] 至少 3 個新測試，`dotnet test` 全綠
+   - 補了 3 個 service 層測試（含門檻邊界 `<` 非 `<=`、停售排除、近 30 天銷量
+     排除 Cancelled），`dotnet test` 37/37 全綠
 
 練習 4
 
-1. 重構後 `dotnet test` 全綠
-2. 我能說出這次重構「改善了什麼、沒有改變什麼」
-3. 我有在 code review 的角度看過 diff（不是 agent 說好就好）
+1. [x] 重構後 `dotnet test` 全綠
+   - 重構前後都跑過，皆為 37/37 全綠（前面練習 2、3 補的測試也都在內）
+2. [x] 我能說出這次重構「改善了什麼、沒有改變什麼」
+   - 改善：`CreateOrderAsync` 從一個長方法拆成「拿客戶 → 前置驗證
+     （`ValidateBasicRequest`）→ 逐行處理（`TryBuildOrderItem`）→ 存檔」四步
+   - 沒變：所有錯誤訊息文字、檢查的短路順序、扣庫存時機、`ServiceResult` 的
+     結構、練習 2 修的 Gold 折扣邏輯
+3. [ ] 我有在 code review 的角度看過 diff（不是 agent 說好就好）
+   - agent 自己對照 diff 檢查過一次（純搬移、沒有夾帶其他變更），但這句的重點
+     是「你」要親自看過，不能算 agent 自己審自己——**待你看一眼
+     `git show 8510bd9`**
 
 ---
 
