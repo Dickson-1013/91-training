@@ -23,5 +23,29 @@ public class ProductRepository : IProductRepository
     public Task<Product?> GetByIdAsync(int id) =>
         _db.Products.FirstOrDefaultAsync(p => p.Id == id);
 
+    public async Task<IReadOnlyList<Product>> GetActiveWithStockBelowAsync(int threshold) =>
+        await _db.Products
+            .Where(p => p.IsActive && p.StockQuantity < threshold)
+            .OrderBy(p => p.StockQuantity)
+            .ToListAsync();
+
+    public async Task<IReadOnlyDictionary<int, int>> GetRecentSoldQuantitiesAsync(IEnumerable<int> productIds, DateTime since)
+    {
+        var ids = productIds.ToList();
+        if (ids.Count == 0)
+            return new Dictionary<int, int>();
+
+        // 一次查詢算出所有商品的近期售出數量，避免對每個商品各查一次（N+1）。
+        var totals = await _db.OrderItems
+            .Where(i => ids.Contains(i.ProductId)
+                && i.Order!.Status != OrderStatus.Cancelled
+                && i.Order.CreatedAt >= since)
+            .GroupBy(i => i.ProductId)
+            .Select(g => new { ProductId = g.Key, Total = g.Sum(i => i.Quantity) })
+            .ToListAsync();
+
+        return totals.ToDictionary(t => t.ProductId, t => t.Total);
+    }
+
     public Task SaveChangesAsync() => _db.SaveChangesAsync();
 }
