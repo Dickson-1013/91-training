@@ -72,17 +72,13 @@ public class OrderService : IOrderService
 
             product.StockQuantity -= line.Quantity;
 
-            var unitPrice = product.UnitPrice;
-            if (customer.Tier == CustomerTier.Gold)
-            {
-                unitPrice = Math.Round(unitPrice * (1 - GetDiscountRate(customer.Tier)), 2);
-            }
-
+            // UnitPriceSnapshot 記錄原價；會員折扣統一在 CalculateTotal 對訂單小計折抵一次，
+            // 這裡不能再折一次，否則 Gold 會員會被重複打折。
             order.Items.Add(new OrderItem
             {
                 ProductId = product.Id,
                 Quantity = line.Quantity,
-                UnitPriceSnapshot = unitPrice
+                UnitPriceSnapshot = product.UnitPrice
             });
         }
 
