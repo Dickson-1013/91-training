@@ -35,22 +35,15 @@ public class OrderService : IOrderService
     public async Task<ServiceResult<Order>> CreateOrderAsync(int customerId, IReadOnlyList<NewOrderLine> lines)
     {
         var customer = await _customerRepository.GetByIdAsync(customerId);
-        if (customer is null)
-            return ServiceResult<Order>.Fail("找不到指定的客戶");
 
-        if (lines is null || lines.Count == 0)
-            return ServiceResult<Order>.Fail("訂單至少需要一項商品");
-
-        if (lines.Any(l => l.Quantity <= 0))
-            return ServiceResult<Order>.Fail("商品數量必須大於 0");
-
-        if (lines.Select(l => l.ProductId).Distinct().Count() != lines.Count)
-            return ServiceResult<Order>.Fail("同一商品請勿重複加入，請調整數量即可");
+        var requestError = ValidateBasicRequest(customer, lines);
+        if (requestError is not null)
+            return ServiceResult<Order>.Fail(requestError);
 
         var errors = new List<string>();
         var order = new Order
         {
-            CustomerId = customer.Id,
+            CustomerId = customer!.Id,
             Status = OrderStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -58,28 +51,13 @@ public class OrderService : IOrderService
         foreach (var line in lines)
         {
             var product = await _productRepository.GetByIdAsync(line.ProductId);
-            if (product is null || !product.IsActive)
+            if (!TryBuildOrderItem(product, line, out var item, out var error))
             {
-                errors.Add($"商品（Id={line.ProductId}）不存在或已停售");
+                errors.Add(error!);
                 continue;
             }
 
-            if (product.StockQuantity < line.Quantity)
-            {
-                errors.Add($"商品「{product.Name}」庫存不足（現有 {product.StockQuantity}，需求 {line.Quantity}）");
-                continue;
-            }
-
-            product.StockQuantity -= line.Quantity;
-
-            // UnitPriceSnapshot 記錄原價；會員折扣統一在 CalculateTotal 對訂單小計折抵一次，
-            // 這裡不能再折一次，否則 Gold 會員會被重複打折。
-            order.Items.Add(new OrderItem
-            {
-                ProductId = product.Id,
-                Quantity = line.Quantity,
-                UnitPriceSnapshot = product.UnitPrice
-            });
+            order.Items.Add(item!);
         }
 
         if (errors.Count > 0)
@@ -89,6 +67,57 @@ public class OrderService : IOrderService
         await _orderRepository.SaveChangesAsync();
 
         return ServiceResult<Order>.Ok(order);
+    }
+
+    /// <summary>建單前置驗證：客戶存在、明細非空、數量合法、不重複下同一商品。回傳第一個失敗訊息，全部通過則回傳 null。</summary>
+    private static string? ValidateBasicRequest(Customer? customer, IReadOnlyList<NewOrderLine> lines)
+    {
+        if (customer is null)
+            return "找不到指定的客戶";
+
+        if (lines is null || lines.Count == 0)
+            return "訂單至少需要一項商品";
+
+        if (lines.Any(l => l.Quantity <= 0))
+            return "商品數量必須大於 0";
+
+        if (lines.Select(l => l.ProductId).Distinct().Count() != lines.Count)
+            return "同一商品請勿重複加入，請調整數量即可";
+
+        return null;
+    }
+
+    /// <summary>
+    /// 驗證單一明細（商品存在且販售中、庫存足夠），通過時順手扣庫存並組出 OrderItem。
+    /// UnitPriceSnapshot 記錄原價；會員折扣統一在 CalculateTotal 對訂單小計折抵一次，
+    /// 這裡不能再折一次，否則 Gold 會員會被重複打折。
+    /// </summary>
+    private static bool TryBuildOrderItem(Product? product, NewOrderLine line, out OrderItem? item, out string? error)
+    {
+        if (product is null || !product.IsActive)
+        {
+            item = null;
+            error = $"商品（Id={line.ProductId}）不存在或已停售";
+            return false;
+        }
+
+        if (product.StockQuantity < line.Quantity)
+        {
+            item = null;
+            error = $"商品「{product.Name}」庫存不足（現有 {product.StockQuantity}，需求 {line.Quantity}）";
+            return false;
+        }
+
+        product.StockQuantity -= line.Quantity;
+
+        item = new OrderItem
+        {
+            ProductId = product.Id,
+            Quantity = line.Quantity,
+            UnitPriceSnapshot = product.UnitPrice
+        };
+        error = null;
+        return true;
     }
 
     public async Task<ServiceResult<Order>> CancelOrderAsync(int id)
