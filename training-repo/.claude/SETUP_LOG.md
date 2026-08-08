@@ -254,6 +254,33 @@ subagent-dispatch behavior, not just the config files' contents:
   new, `Program.cs`'s two `.With*` lines) is self-contained; `git revert <commit-hash>` removes
   cleanly
 
+## Activity 2, Exercise 0 (2026-08-08): Playwright MCP end-to-end order creation
+
+- What: registered Playwright MCP (`claude mcp add playwright -- npx @playwright/mcp@latest`,
+  local scope, from `training-repo`) — separate mechanism from `.mcp.json` (that one's
+  team-shared/git-tracked; this is a personal local-scope registration in `~/.claude.json`, not a
+  repo file, so nothing to commit for the registration itself)
+- Why: `documents/activities/activity-2-custom-mcp.md`, Exercise 0
+- Verified: `claude mcp list` showed `playwright: npx @playwright/mcp@latest - ✔ Connected`
+- Live test: asked (via `claude -p`, bypassPermissions) to navigate to `/Orders/Create`, pick the
+  first customer/product, submit, screenshot the result. Agent used
+  `mcp__playwright__browser_navigate` -> `browser_snapshot` (accessibility tree, not pixel
+  coordinates) -> `browser_select_option` (by element ref) x2 -> `browser_click` ->
+  `browser_take_screenshot`, saved to `training-repo/.claude/ex0-screenshot.png`. Order **#203**
+  created (蔡承翰/Standard tier, SKU-1001, qty 1, NT$1,420, 0% discount) — read the screenshot
+  file back and visually confirmed it matches the reported numbers exactly, not just trusting the
+  agent's text summary. 14 turns, $0.24
+- Committing the screenshot itself (44KB PNG) as concrete evidence, per `PROCESS.md`'s own
+  principle of pasting real artifacts over summaries
+- Reflection (recorded in full in `PROCESS.md`): contrasts with Activity 1 Exercise 2, where the
+  human was the one operating the browser and relaying symptoms in text — here the agent is the
+  one operating the browser directly. Upside: no relay-distortion risk. Downside: the human no
+  longer has first-hand knowledge of what happened unless they go verify the screenshot/replay
+  themselves, which is exactly why this entry didn't stop at trusting the agent's "success" text
+- Rollback: created order #203 in the live training DB — reversible via the Cancel button /
+  `cancel_order` MCP tool if this test order ever needs cleaning up (left as-is; harmless seed-like
+  data, consistent with other test orders created earlier in this session)
+
 ## Pending / next steps
 
 - [ ] Open a fresh Claude Code session with `training-repo` as the project root and run through the

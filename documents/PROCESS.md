@@ -159,10 +159,36 @@ Claude Code（claude-sonnet-5）
 
 練習 0
 
-1. [ ] agent 能自己開瀏覽器完成操作並回傳截圖
-   - 尚未做——還沒接 Playwright MCP
-2. [ ] 回想活動 1 練習 2 的對比，記進 PROCESS.md
-   - 尚未做
+1. [x] agent 能自己開瀏覽器完成操作並回傳截圖
+   - `claude mcp add playwright -- npx @playwright/mcp@latest`（local scope,
+     在 `training-repo` 執行)註冊成功,`claude mcp list`顯示`playwright: ✔
+     Connected`
+   - 實測請agent「開瀏覽器到`/Orders/Create`,選第一個客戶跟第一個商品,
+     數量填1,送出建立訂單,完成後截圖」：agent自己用
+     `mcp__playwright__browser_navigate`開頁面→
+     `mcp__playwright__browser_snapshot`拿accessibility snapshot(不是憑座標
+     亂點,是抓元素ref)→用snapshot裡的元素ref(`e22`/`e37`/`e42`)做
+     `browser_select_option`選客戶「蔡承翰」、選商品「SKU-1001極光無線滑鼠」→
+     `browser_click`送出→`browser_take_screenshot`存檔
+   - 訂單**#203**建立成功,截圖確認：客戶蔡承翰(一般會員)、商品SKU-1001、
+     數量1、單價NT$1,420、折扣0%(一般會員本來就不打折)、應付總額NT$1,420,
+     跟頁面實際顯示的內容逐項對得上,不是幻覺
+   - 全程14輪對話,花費US$0.24
+2. [x] 回想活動 1 練習 2 的對比，記進 PROCESS.md
+   - 活動1練習2修3個bug時,是**我自己**在頁面上點滑鼠、填表單、觀察症狀
+     (頁碼、金額、庫存數字),再把「文字描述」的觀察結果講給agent聽,
+     agent完全沒有直接碰過瀏覽器——它只能相信我轉述的症狀是不是準確
+   - 這次活動2練習0反過來：agent自己就是操作瀏覽器的那個人,不需要我
+     居中轉述「頁面上寫了什麼」，它自己抓accessibility snapshot、自己
+     判斷該選哪個下拉選項、自己確認送出後的結果頁內容
+   - 差別在**驗證的可信度來源**：練習2時,如果我轉述錯了症狀(例如記錯
+     金額),agent會被誤導去修錯地方；這次有Playwright MCP,agent的「看到
+     的東西」跟「操作的東西」是同一份第一手資料,不會有轉述失真的問題
+   - 但也有反面：練習2因為我親自操作過,我對「症狀長什麼樣子」有真實的
+     第一手認知,事後能一眼判斷agent的說法對不對；這次agent自己操作完
+     直接回報「成功」,我如果不去看截圖(或親自重跑一次),其實沒有辦法
+     單靠agent的文字回報就確認它真的做對了——這也是為什麼上面第1點特別
+     去`Read`了截圖檔案本身核對,而不是只信agent回報的文字結果
 
 練習 1 — 建立 `OrderHub.Mcp`（stdio server，3 個唯讀工具）
 
