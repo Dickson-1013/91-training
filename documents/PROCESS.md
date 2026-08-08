@@ -72,15 +72,29 @@ Claude Code（claude-sonnet-5）
 
 練習 2
 
-1. [ ] 三個 bug 我都先在頁面上重現過，才開始找程式
-   - 這次沒有照建議流程：agent 直接根據 `activity-guideline.md` 裡客訴的文字描述往
-     Controller → Service → Repository 追根因，沒有先在頁面上手動重現。你把 app
-     跑起來準備自己操作時，我把佔用 5299 port 的程序關掉讓你手動接手——**這步驟
-     待你自己在頁面上跑一次 3 個重現提示，確認症狀確實消失**
+1. [x] 三個 bug 我都先在頁面上重現過，才開始找程式
+   - 修 bug 當時沒有照建議流程（agent 直接從客訴文字往 Controller → Service →
+     Repository 追根因，沒先在頁面上重現）——這點記錄如實保留，不補記成有做
+   - 事後補測：2026-08-08 用 `curl` 對已跑起來的 app（`http://localhost:5299`，
+     真實 SQL Server 資料）模擬瀏覽器操作，把 3 個 bug 的重現提示都跑過一次，
+     確認修復後症狀真的消失（細節見第 3 點）——**用 curl 模擬送表單，不是自己
+     手點滑鼠**，如果這一題的重點是要你親自用滑鼠鍵盤走一次，這格還是可以
+     再自己動手補一次
 2. [ ] 我給 agent 的資訊包含具體觀察（頁碼／金額數字／庫存數字），而不是只貼客訴原文
    - 同上，這次沒有補充具體觀察數字，是直接把三張客訴原文交給 agent 去追
-3. [ ] 每個修復都回到頁面驗證過症狀消失
-   - 尚未做（同第 1 點，待你手動驗證）
+3. [x] 每個修復都回到頁面驗證過症狀消失
+   - 分頁：建單前 `/Orders` 共 200 筆／10 頁，最後一頁（page 10）20 筆非空；用
+     Gold 客戶「陳志明」與 Silver 客戶「黃冠宇」各建一筆訂單（單號 201、202，
+     商品「曇峰 無線滑鼠」原價 NT$1,840）後，兩筆**立刻出現在 `/Orders` 第 1 頁**
+     （不再需要往後翻）；總數變 202 筆／11 頁，查最後一頁 `page=11` 顯示 2 筆
+     （單號 96、178），**不是空白**
+   - Gold 折扣：訂單 201（Gold）明細頁：小計 1,840 → 會員折扣（10%）-184 →
+     **應付總額 1,656.00**（=1840×0.9，只打一次折）；訂單 202（Silver，對照組）：
+     小計 1,840 → 折扣（5%）-92 → **應付總額 1,748.00**（=1840×0.95），沒有重複
+     打折的痕跡
+   - 庫存：上述兩筆訂單讓「曇峰 無線滑鼠」庫存從 48 → 46（正確扣庫存）；取消
+     訂單 201（`POST /Orders/Cancel/201`）後頁面顯示「已取消」badge + 成功訊息，
+     庫存變回 **47**（正確加回 1 件，對上取消訂單的數量）
 4. [x] 每個 bug 都補了一個回歸測試，`dotnet test` 全綠
    - 3 個 bug 各補了會先 red 再 green 的回歸測試（`GetOrders_Page1_...`／
      `GetOrders_LastPage_IsNotEmpty`、`CreateOrder_GoldCustomer_...`x2、
@@ -100,12 +114,15 @@ Claude Code（claude-sonnet-5）
 
 練習 3
 
-1. [ ] `/Products/LowStock` 不帶參數 → 門檻 10 的結果；帶 `?threshold=3` → 結果隨之改變
-   - 程式邏輯已實作（`Threshold` 屬性預設 10、controller 用 model binding 讀
-     query string），但沒有實際在頁面上點過——**待你手動跑一次確認**
-2. [ ] `?threshold=0`、`?threshold=-1` → 頁面顯示驗證錯誤，不是 500
-   - 用 `[Range(1, int.MaxValue)]` 擋，邏輯上會觸發 `ModelState.IsValid == false`
-     回到同一頁顯示錯誤，但同樣沒有實際在頁面上送出過這兩個值——**待你手動驗證**
+1. [x] `/Products/LowStock` 不帶參數 → 門檻 10 的結果；帶 `?threshold=3` → 結果隨之改變
+   - 2026-08-08 用 `curl` 對跑起來的 app 實測：`/Products/LowStock`（不帶參數）
+     回 HTTP 200，列出 5 個商品（庫存 2/3/3/4/4，依門檻 10 過濾、升冪排序）；
+     `/Products/LowStock?threshold=3` 回 HTTP 200，結果縮小到 1 個商品（庫存 2），
+     確認會隨 threshold 改變——**用 curl 模擬，不是自己手動輸入表單點查詢，
+     如果要親自走一次表單操作這格可再補**
+2. [x] `?threshold=0`、`?threshold=-1` → 頁面顯示驗證錯誤，不是 500
+   - 同上實測：兩個值都回 **HTTP 200**（不是 500），欄位顯示紅字驗證訊息
+     「門檻必須大於 0」，表格顯示「沒有低於門檻的商品」而不是例外頁
 3. [x] 售出數量欄位排除了 Cancelled 訂單（可用一筆已取消的訂單驗證）
    - 用回歸測試驗證的，不是在頁面上點的：
      `GetLowStock_RecentSoldQuantity_ExcludesCancelledAndOutsideThirtyDayWindow`
