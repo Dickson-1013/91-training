@@ -35,22 +35,15 @@ public class OrderService : IOrderService
     public async Task<ServiceResult<Order>> CreateOrderAsync(int customerId, IReadOnlyList<NewOrderLine> lines)
     {
         var customer = await _customerRepository.GetByIdAsync(customerId);
-        if (customer is null)
-            return ServiceResult<Order>.Fail("找不到指定的客戶");
 
-        if (lines is null || lines.Count == 0)
-            return ServiceResult<Order>.Fail("訂單至少需要一項商品");
-
-        if (lines.Any(l => l.Quantity <= 0))
-            return ServiceResult<Order>.Fail("商品數量必須大於 0");
-
-        if (lines.Select(l => l.ProductId).Distinct().Count() != lines.Count)
-            return ServiceResult<Order>.Fail("同一商品請勿重複加入，請調整數量即可");
+        var requestError = ValidateBasicRequest(customer, lines);
+        if (requestError is not null)
+            return ServiceResult<Order>.Fail(requestError);
 
         var errors = new List<string>();
         var order = new Order
         {
-            CustomerId = customer.Id,
+            CustomerId = customer!.Id,
             Status = OrderStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -58,32 +51,13 @@ public class OrderService : IOrderService
         foreach (var line in lines)
         {
             var product = await _productRepository.GetByIdAsync(line.ProductId);
-            if (product is null || !product.IsActive)
+            if (!TryBuildOrderItem(product, line, out var item, out var error))
             {
-                errors.Add($"商品（Id={line.ProductId}）不存在或已停售");
+                errors.Add(error!);
                 continue;
             }
 
-            if (product.StockQuantity < line.Quantity)
-            {
-                errors.Add($"商品「{product.Name}」庫存不足（現有 {product.StockQuantity}，需求 {line.Quantity}）");
-                continue;
-            }
-
-            product.StockQuantity -= line.Quantity;
-
-            var unitPrice = product.UnitPrice;
-            if (customer.Tier == CustomerTier.Gold)
-            {
-                unitPrice = Math.Round(unitPrice * (1 - GetDiscountRate(customer.Tier)), 2);
-            }
-
-            order.Items.Add(new OrderItem
-            {
-                ProductId = product.Id,
-                Quantity = line.Quantity,
-                UnitPriceSnapshot = unitPrice
-            });
+            order.Items.Add(item!);
         }
 
         if (errors.Count > 0)
@@ -95,6 +69,57 @@ public class OrderService : IOrderService
         return ServiceResult<Order>.Ok(order);
     }
 
+    /// <summary>建單前置驗證：客戶存在、明細非空、數量合法、不重複下同一商品。回傳第一個失敗訊息，全部通過則回傳 null。</summary>
+    private static string? ValidateBasicRequest(Customer? customer, IReadOnlyList<NewOrderLine> lines)
+    {
+        if (customer is null)
+            return "找不到指定的客戶";
+
+        if (lines is null || lines.Count == 0)
+            return "訂單至少需要一項商品";
+
+        if (lines.Any(l => l.Quantity <= 0))
+            return "商品數量必須大於 0";
+
+        if (lines.Select(l => l.ProductId).Distinct().Count() != lines.Count)
+            return "同一商品請勿重複加入，請調整數量即可";
+
+        return null;
+    }
+
+    /// <summary>
+    /// 驗證單一明細（商品存在且販售中、庫存足夠），通過時順手扣庫存並組出 OrderItem。
+    /// UnitPriceSnapshot 記錄原價；會員折扣統一在 CalculateTotal 對訂單小計折抵一次，
+    /// 這裡不能再折一次，否則 Gold 會員會被重複打折。
+    /// </summary>
+    private static bool TryBuildOrderItem(Product? product, NewOrderLine line, out OrderItem? item, out string? error)
+    {
+        if (product is null || !product.IsActive)
+        {
+            item = null;
+            error = $"商品（Id={line.ProductId}）不存在或已停售";
+            return false;
+        }
+
+        if (product.StockQuantity < line.Quantity)
+        {
+            item = null;
+            error = $"商品「{product.Name}」庫存不足（現有 {product.StockQuantity}，需求 {line.Quantity}）";
+            return false;
+        }
+
+        product.StockQuantity -= line.Quantity;
+
+        item = new OrderItem
+        {
+            ProductId = product.Id,
+            Quantity = line.Quantity,
+            UnitPriceSnapshot = product.UnitPrice
+        };
+        error = null;
+        return true;
+    }
+
     public async Task<ServiceResult<Order>> CancelOrderAsync(int id)
     {
         var order = await _orderRepository.GetWithDetailsAsync(id);
@@ -104,17 +129,17 @@ public class OrderService : IOrderService
         if (order.Status != OrderStatus.Pending && order.Status != OrderStatus.Confirmed)
             return ServiceResult<Order>.Fail($"狀態為 {order.Status} 的訂單不可取消");
 
-        order.Status = OrderStatus.Cancelled;
-
-        if (order.Status == OrderStatus.Pending || order.Status == OrderStatus.Confirmed)
+        // 上面已確認原狀態是 Pending/Confirmed 才能走到這裡，庫存一律要還原；
+        // 不能等把 Status 改成 Cancelled 之後再用「目前狀態」去判斷要不要還庫存
+        // （那樣條件永遠是 false，庫存就再也回不去了）。
+        foreach (var item in order.Items)
         {
-            foreach (var item in order.Items)
-            {
-                var product = await _productRepository.GetByIdAsync(item.ProductId);
-                if (product is not null)
-                    product.StockQuantity += item.Quantity;
-            }
+            var product = await _productRepository.GetByIdAsync(item.ProductId);
+            if (product is not null)
+                product.StockQuantity += item.Quantity;
         }
+
+        order.Status = OrderStatus.Cancelled;
 
         await _orderRepository.SaveChangesAsync();
 

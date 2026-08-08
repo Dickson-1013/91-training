@@ -37,6 +37,39 @@ public class OrderServiceCreateTests
     }
 
     [Fact]
+    public async Task CreateOrder_GoldCustomer_SnapshotsOriginalPriceWithoutPreDiscounting()
+    {
+        using var db = TestSetup.CreateContext();
+        var service = TestSetup.CreateOrderService(db);
+        var customer = TestSetup.AddCustomer(db, tier: CustomerTier.Gold);
+        var product = TestSetup.AddProduct(db, unitPrice: 1000m);
+
+        var result = await service.CreateOrderAsync(customer.Id, new[] { new NewOrderLine(product.Id, 1) });
+
+        Assert.True(result.Success);
+        // 單價快照應是原價；折扣只在 CalculateTotal 對訂單小計折抵一次，
+        // 這裡若被打過折會導致 Gold 會員之後被重複折扣。
+        Assert.Equal(1000m, result.Value!.Items.Single().UnitPriceSnapshot);
+    }
+
+    [Fact]
+    public async Task CreateOrder_GoldCustomer_TotalIsDiscountedOnlyOnce()
+    {
+        using var db = TestSetup.CreateContext();
+        var service = TestSetup.CreateOrderService(db);
+        var customer = TestSetup.AddCustomer(db, tier: CustomerTier.Gold);
+        var product = TestSetup.AddProduct(db, unitPrice: 1000m);
+
+        var result = await service.CreateOrderAsync(customer.Id, new[] { new NewOrderLine(product.Id, 1) });
+        var order = result.Value!;
+        order.Customer = customer;
+
+        // Gold 折扣 10%：1000 -> 900。修復前因為建單時已先打過一次折，
+        // CalculateTotal 再打一次會變成 810（重複折扣），客訴財務對帳金額少了一截。
+        Assert.Equal(900m, service.CalculateTotal(order));
+    }
+
+    [Fact]
     public async Task CreateOrder_DecrementsProductStock()
     {
         using var db = TestSetup.CreateContext();
