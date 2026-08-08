@@ -164,6 +164,38 @@ subagent-dispatch behavior, not just the config files' contents:
 - Rollback: nothing persisted by this exercise — it only ran read-only MCP calls against the
   already-committed Exercise 1 code; no files changed besides this log and `PROCESS.md`
 
+## Activity 2, Exercise 3 (2026-08-08): before/after comparison via `claude -p`
+
+- What: registered `orderhub` in `training-repo/.mcp.json` (already committed as `8af6909`), then
+  ran the same question ("哪些商品庫存低於 5?") through two independent non-interactive `claude -p`
+  sessions with `--permission-mode bypassPermissions --output-format stream-json --verbose`, cwd
+  set to `training-repo` so `.mcp.json` auto-loads for that invocation:
+  - No-MCP baseline: `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` to force-disable the
+    project's `.mcp.json` regardless. 17 turns, 68.9s API time, $0.36. Explored via `find`/`Read`
+    (`Product.cs`), checked `.mcp.json` (registered but no tools reachable), `ToolSearch` x2 (empty),
+    read `appsettings.json` for the connection string, found `sqlcmd` via `where`, wrote a raw
+    `SELECT ... FROM Products WHERE StockQuantity < 5 AND IsActive = 1` query, hit mangled Chinese
+    output twice (`sqlcmd`'s console codepage vs UTF-8), then `-u` (unicode) output to a file +
+    `iconv -f UTF-16LE -t UTF-8` to finally get readable text. Answer correct but expensive to reach.
+  - With-MCP: plain `.mcp.json` load, no extra flags. 4 turns, 15.8s API time, $0.14. `ToolSearch`
+    (server still connecting) -> `ToolSearch` (resolved `mcp__orderhub__low_stock`) -> called it
+    directly with `threshold=5` -> clean JSON, correct Chinese text (no encoding issue at all,
+    `OrderHubTools.cs`'s `UnsafeRelaxedJsonEscaping` does its job) -> answered.
+  - Both runs' `result` content matched exactly (same 5 products/stock numbers) — only the path to
+    get there differed.
+- Why: `documents/activities/activity-2-custom-mcp.md`, Exercise 3
+- Deviation from the guide: guide describes doing this interactively (`/mcp` in a live session,
+  toggling `.mcp.json` by renaming it). Used `claude -p` (non-interactive, single-shot) instead for
+  the same reason as Exercise 2 — no browser/interactive terminal available in this session — which
+  actually gives harder numbers (exact turn count/time/cost) than an eyeballed interactive
+  comparison would. Session `init` event's `mcp_servers` list showing `{"name":"orderhub",...}`
+  stands in for the `/mcp` check (validation item 1)
+- Housekeeping: earlier in this session, the web-UI Inspector's `node` process (PID 4412, port
+  6274/51289) was found still listening after a `TaskStop` on its wrapping bash task didn't kill
+  the underlying child — killed directly via `Stop-Process -Id 4412 -Force`
+- Rollback: nothing persisted beyond `.mcp.json` (already committed separately); the two `claude -p`
+  runs were read-only queries against the training DB, no files changed
+
 ## Pending / next steps
 
 - [ ] Open a fresh Claude Code session with `training-repo` as the project root and run through the

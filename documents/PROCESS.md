@@ -193,6 +193,40 @@ Claude Code（claude-sonnet-5）
      `tools/call` JSON-RPC 方法），但如果你想眼睛看一次 Inspector 的網頁介面，
      指令是 `npx @modelcontextprotocol/inspector dotnet run --project src/OrderHub.Mcp`
 
+練習 3 — 接進 agent，before/after 對照
+
+1. [x] Claude Code 輸入 `/mcp` 能看到 orderhub server 與三個工具
+   - 2026-08-08：用 `claude -p`（非互動模式，cwd=`training-repo`）驗證，session 初始化時
+     `mcp_servers` 列表就出現 `{"name":"orderhub","status":"pending"}`（對應互動session
+     裡`/mcp`會看到的畫面）；`ToolSearch` 能解析到 `mcp__orderhub__low_stock`（三個工具在
+     練習2已經用Inspector CLI確認過都存在）
+2. [x] 對照實驗完成且記錄
+   - 同一句話「哪些商品庫存低於 5?」，兩個獨立 session 分別跑：
+   - **沒有MCP工具**（`--strict-mcp-config` 強制關閉 `.mcp.json`）：**17輪對話、
+     API耗時68.9秒、花費US$0.36**。路徑：`find`找Product相關檔案→`Read` `Product.cs`
+     →檢查`.mcp.json`(有註冊但查不到可用工具)→`ToolSearch`兩次都空手→`Read`
+     `appsettings.json`拿連線字串→`where sqlcmd`找到工具→自己寫一段原始SQL
+     （`SELECT Sku, Name, StockQuantity FROM Products WHERE StockQuantity < 5
+     AND IsActive = 1 ORDER BY StockQuantity`）→**中文商品名稱亂碼兩次**（`sqlcmd`
+     預設輸出編碼跟終端機UTF-8打架，`-f 65001`也沒救）→改成`-u`輸出到檔案、
+     再用`iconv -f UTF-16LE -t UTF-8`手動轉碼才拿到可讀結果
+   - **有MCP工具**（`.mcp.json`正常載入）：**4輪對話、API耗時15.8秒、花費
+     US$0.14**。路徑：`ToolSearch`（server還在連線,提示稍後再查）→`ToolSearch`
+     （找到`mcp__orderhub__low_stock`）→直接呼叫`threshold=5`→拿到乾淨JSON
+     （中文直接正確顯示,`OrderHubTools.cs`裡的`UnsafeRelaxedJsonEscaping`起作用,
+     完全沒有編碼問題）→答完
+   - **差異**：輪數 17→4（少13輪）、API時間 68.9s→15.8s（快4.4倍）、成本
+     $0.36→$0.14（省61%）；沒工具版還額外撞到編碼地雷，工具版完全沒有。
+     兩邊最終答案內容**一致**（同5個商品：SKU-1048/1005/1023/1014/1032,
+     庫存2/3/3/4/4）——差別在「怎麼拿到答案」，不是「答案本身」
+   - 備註：這次沒有在互動式`/mcp`介面裡人眼確認，是用`claude -p`（非互動模式,
+     `--output-format stream-json --verbose`看完整trace）做的自動化對照,原因跟
+     練習2一樣——瀏覽器/互動終端這個session裡沒有；效果上更嚴謹（有精確的
+     輪數/秒數/成本數字），但你如果想自己在互動session裡感受一次操作手感,
+     指令是進`training-repo`後開`claude`,輸入`/mcp`確認,再問同一句話
+3. [x] `.mcp.json`（或 config 片段說明）進 git，一個獨立 commit
+   - `8af6909`
+
 ---
 
 ## 附錄：值得留下的對話片段
