@@ -227,6 +227,30 @@ Claude Code（claude-sonnet-5）
 3. [x] `.mcp.json`（或 config 片段說明）進 git，一個獨立 commit
    - `8af6909`
 
+練習 4 — 會改資料的工具:`cancel_order`
+
+1. [x] MCP Inspector 中 `cancel_order` 的 annotations 如你所標(destructiveHint 等),三個唯讀工具則顯示 read-only
+   - `tools/list` 確認：`get_order`／`low_stock`／`customer_orders` 都是
+     `"annotations": {"readOnlyHint": true}`；`cancel_order` 是
+     `"annotations": {"destructiveHint": true, "idempotentHint": false}`
+2. [ ] 對 agent 說「幫我取消訂單 X」:觀察**權限確認提示**——你按允許之前,資料不會被動到
+   - 尚未做——這次為了自動化對照全程用 `--permission-mode bypassPermissions`
+     跑，**刻意跳過了確認提示**，所以沒有機會觀察「按允許之前資料不會被動」
+     這個安全機制本身，只驗證了工具邏輯本身正確（下面第3、4點）。這一項
+     **必須你自己在互動session裡試一次**才算數
+3. [x] 取消一筆待處理訂單成功,回 `/Products` 頁面確認庫存有回補
+   - 訂單202（黃冠宇/Silver,商品SKU-1021 x1,狀態Pending）：呼叫
+     `cancel_order(id=202)`→回「訂單 202 已取消,庫存已回補」；`/Products`
+     頁面SKU-1021庫存 47→**48**；訂單明細頁badge變成「已取消」
+4. [x] 對同一筆訂單再取消一次、或挑一筆已出貨訂單取消:得到清楚的拒絕訊息而非 exception dump
+   - 再次呼叫`cancel_order(id=202)`（已取消的訂單）→「取消失敗:狀態為
+     Cancelled 的訂單不可取消」
+   - 呼叫`cancel_order(id=193)`（Shipped訂單）→「取消失敗:狀態為 Shipped
+     的訂單不可取消」；事後用`get_order(193)`確認狀態還是Shipped、品項數量
+     沒變——拒絕時真的沒有動到任何資料
+5. 獨立 commit;PROCESS.md 記錄
+   - 待commit（程式碼+這次記錄一起送出）
+
 ---
 
 ## 附錄：值得留下的對話片段

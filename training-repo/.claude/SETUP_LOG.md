@@ -196,6 +196,36 @@ subagent-dispatch behavior, not just the config files' contents:
 - Rollback: nothing persisted beyond `.mcp.json` (already committed separately); the two `claude -p`
   runs were read-only queries against the training DB, no files changed
 
+## Activity 2, Exercise 4 (2026-08-08): `cancel_order` + read-only annotations
+
+- What: added `[McpServerTool(ReadOnly = true)]` to the 3 existing tools (`get_order`, `low_stock`,
+  `customer_orders`) and a new `cancel_order` tool with `[McpServerTool(Destructive = true,
+  Idempotent = false)]`, per the guide's exact code. `cancel_order` only calls
+  `orderService.CancelOrderAsync(id)` and maps `ServiceResult.Success`/`ErrorMessage` to a string —
+  no cancellation/stock-restore logic duplicated in the tool
+- Why: `documents/activities/activity-2-custom-mcp.md`, Exercise 4
+- Verified before writing: grepped the installed `ModelContextProtocol.Core.dll` (2.1.0) for
+  `Destructive`/`Idempotent`/`ReadOnly` — confirmed these are real `McpServerToolAttribute`
+  properties in this SDK version, not just guide pseudocode (they live on
+  `ModelContextProtocol.Core.dll`, not the top-level `ModelContextProtocol.dll` a naive search
+  would check first)
+- Verified after: `dotnet build src/OrderHub.Mcp` 0 errors/warnings;
+  `tools/list` via Inspector CLI shows `readOnlyHint: true` on the 3 read-only tools and
+  `destructiveHint: true, idempotentHint: false` on `cancel_order`; functional test against the
+  live DB — cancelled order 202 (Pending, product SKU-1021 x1): tool replied "訂單 202 已取消,
+  庫存已回補", `/Products` page stock 47->48, order badge -> 已取消; re-cancelling 202 (already
+  Cancelled) -> "取消失敗:狀態為 Cancelled 的訂單不可取消"; cancelling order 193 (Shipped) ->
+  "取消失敗:狀態為 Shipped 的訂單不可取消", confirmed via `get_order(193)` afterward that its
+  status/items were untouched by the rejected attempt
+- Deviation / known gap: all of the above ran with `--permission-mode bypassPermissions` (for
+  automation, same as Exercises 2/3), which means the actual **interactive confirmation prompt**
+  the guide's validation item 2 asks about ("say 'cancel order X' to the agent, watch the
+  permission prompt, confirm nothing is touched before you approve") was never exercised — only
+  the tool's own logic was verified. Flagged as not-done in `PROCESS.md`; needs the user in a live
+  session
+- Rollback: `git diff` on `OrderHubTools.cs` shows exactly the annotation additions + new method;
+  `git revert <commit-hash>` removes cleanly, no other files touched
+
 ## Pending / next steps
 
 - [ ] Open a fresh Claude Code session with `training-repo` as the project root and run through the
