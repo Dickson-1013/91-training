@@ -251,6 +251,45 @@ Claude Code（claude-sonnet-5）
 5. 獨立 commit;PROCESS.md 記錄
    - 待commit（程式碼+這次記錄一起送出）
 
+練習 5 — Resources 與 Prompts
+
+1. [x] MCP Inspector:Resources 分頁讀得到 `orderhub://discount-rules`;Prompts 分頁能帶 `threshold` 參數取得展開後的訊息
+   - 用Inspector CLI驗證：`resources/list`列得到「會員折扣規則」；`resources/read`
+     讀到跟程式碼裡完全一致的文字；`prompts/list`列得到`low_stock_report`；
+     `prompts/get --prompt-args threshold=5`正確展開成「請用low_stock工具
+     (threshold=5)查出低庫存商品...」
+2. [x]（部分）Claude Code:`@` 選 resource 後問折扣問題,agent 用 resource 內容作答
+   - **這一項的結果跟guide預期不同,而且是個有意思的發現**：這次沒有互動式
+     `@`選取（同前面幾個練習,終端/瀏覽器工具不可用),改成直接用`claude -p`
+     問「Gold會員買1000元商品應付多少?」（MCP resource已註冊,但沒有手動
+     `@`選取它)——**agent完全沒有用到discount-rules這個resource**,而是自己
+     去讀了`OrderService.cs`跟`CustomerTier.cs`原始碼算出答案(900元,正確)。
+     這證實了guide附註講的：Resource「由client決定何時放進context」，
+     沒有明確選取,agent不會自動抓取它、跟完全沒有這個resource時行為一樣
+   - 這一項要「用resource內容作答」才算真正過關,**需要你自己在互動session
+     裡打`@`選取一次**才能驗證guide預期的行為
+3. [x] Claude Code:`/mcp__orderhub__low_stock_report` 一鍵產出採購建議表
+   - 用`claude -p "/mcp__orderhub__low_stock_report"`實際跑過：prompt展開後
+     agent自動呼叫了`mcp__orderhub__low_stock`工具（確認prompt→tool的組合
+     行為），拿到5個低庫存商品,輸出一份含SKU/名稱/現有庫存/建議補貨量/理由
+     的表格。**副產品**：agent老實回報了一個真的工具缺口——目前沒有「依SKU
+     查近期訂單」的工具,所以它主動說「無法交叉核對實際銷售速度,補貨量是
+     保守估計」,並問我要不要給它訂單/客戶ID去查——沒有幻覺硬編數字
+4. [x] PROCESS.md 記錄 5c 第 3 點的思考;獨立 commit
+   - **折扣規則用 Resource 給,和讓 agent 自己去讀 `OrderService.cs`,差在哪?**
+     Resource 的價值在「團隊共用一份權威文字、版本控制、規則改版只改一處」，
+     但它**不會自動生效**——上面第2點就實測到,沒有人手動`@`選取,agent直接
+     繞去讀code，跟沒有resource一樣。而且這次讀code反而拿到更完整的資訊
+     （`Math.Round`到小數點兩位這個實作細節,resource文字裡沒寫)——resource
+     內容一旦跟程式碼實際邏輯有落差,就是「兩份真相」的風險，跟練習1「金額
+     別自己算」是同一個坑，只是換了個地方
+   - **prompt 範本放在 server,和每個人自己打一段話,差在哪?**
+     這次`low_stock_report`跑起來,順手暴露了一個大家可能都沒注意到的工具
+     缺口（沒有依SKU查訂單的工具）——如果這段話是每個人自己臨時打,這個發現
+     不會被記錄下來,下次還是會重新踩到同一個坑；寫進server的prompt等於把
+     「該用哪個工具、該問什麼」的知識**進版控、可重複執行**,這個發現本身
+     就是最好的示範
+
 ---
 
 ## 附錄：值得留下的對話片段

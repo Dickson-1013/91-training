@@ -226,6 +226,34 @@ subagent-dispatch behavior, not just the config files' contents:
 - Rollback: `git diff` on `OrderHubTools.cs` shows exactly the annotation additions + new method;
   `git revert <commit-hash>` removes cleanly, no other files touched
 
+## Activity 2, Exercise 5 (2026-08-08): Resource + Prompt
+
+- What: added `OrderHubResources.cs` (`[McpServerResourceType]`, static `DiscountRules()` exposing
+  `orderhub://discount-rules` as `text/markdown`) and `OrderHubPrompts.cs` (`[McpServerPromptType]`,
+  `low_stock_report` prompt with a `threshold` parameter, defaults 10), both per the guide's exact
+  code; registered via `.WithResources<OrderHubResources>().WithPrompts<OrderHubPrompts>()` in
+  `Program.cs`
+- Why: `documents/activities/activity-2-custom-mcp.md`, Exercise 5
+- Verified: `dotnet build` 0 errors/warnings; Inspector CLI `resources/list`/`resources/read` and
+  `prompts/list`/`prompts/get --prompt-args threshold=5` all match what's in the code
+- Live test 1 (prompt -> tool chain): `claude -p "/mcp__orderhub__low_stock_report"` (bypassPermissions)
+  -> agent called `mcp__orderhub__low_stock`, produced a 5-row restock table, and **on its own**
+  flagged a real gap — there's no "orders by SKU" tool, so it couldn't cross-check sales velocity
+  and said the restock quantities were conservative estimates. No fabricated numbers.
+- Live test 2 (resource, negative result): asked "Gold 會員買 1000 元商品應付多少?" via `claude -p`
+  with the resource registered but **not explicitly `@`-mentioned** (no interactive terminal
+  available to do the mention) — the agent ignored the resource entirely and instead read
+  `OrderService.cs` + `CustomerTier.cs` to compute the answer (900, correct). Confirms the guide's
+  own footnote: resources only enter context when a client explicitly pulls them in, unlike tools
+  the agent can call proactively. Recorded as a "different from what the guide expects, but a
+  legitimate finding" result in `PROCESS.md`, not glossed over as a pass
+- Known gap: validation item 2 ("`@` 選 resource 後問折扣問題，agent 用 resource 內容作答") still
+  needs a real interactive `@`-mention test — the CLI substitute above demonstrates the *absence*
+  of that behavior, not its presence
+- Rollback: `git diff` on the 3 touched files (`OrderHubResources.cs` new, `OrderHubPrompts.cs`
+  new, `Program.cs`'s two `.With*` lines) is self-contained; `git revert <commit-hash>` removes
+  cleanly
+
 ## Pending / next steps
 
 - [ ] Open a fresh Claude Code session with `training-repo` as the project root and run through the
