@@ -105,6 +105,36 @@ subagent-dispatch behavior, not just the config files' contents:
   docs/process-exercise1` (only if the branch is not needed — destructive, would ask before doing this)
 - Local only, not pushed
 
+## Activity 2, Exercise 1 (2026-08-08): `OrderHub.Mcp` scaffold
+
+- What: new console project `src/OrderHub.Mcp` — stdio MCP server exposing 3 read-only tools
+  (`get_order`, `low_stock`, `customer_orders`), reusing `OrderHub.Core`/`Infrastructure` service
+  and repository layers (no logic duplicated, no direct `DbContext` access from the tool class)
+  - `Program.cs`: generic host, EF Core `OrderHubDbContext` wired to the same connection string as
+    `OrderHub.Web`, DI registrations for `ICustomerRepository`/`IProductRepository`/`IOrderRepository`/
+    `IOrderService`, logging forced to stderr (stdout is the MCP protocol channel), stdio transport
+  - `OrderHubTools.cs`: `[McpServerToolType]` class, constructor-injects `IOrderService` +
+    `IProductRepository`; entities are projected to anonymous objects before serializing (avoids the
+    `Order` <-> `Customer` circular-reference crash the guide calls out); amounts come from
+    `IOrderService.CalculateSubtotal/CalculateTotal/GetDiscountRate`, not reimplemented
+  - `OrderHub.Mcp.csproj`: packages `ModelContextProtocol` 2.1.0 (`--prerelease`) and
+    `Microsoft.Extensions.Hosting`, project references to `OrderHub.Core`/`OrderHub.Infrastructure`
+  - `OrderHub.sln`: modified to add the new project
+- Why: `documents/activities/activity-2-custom-mcp.md`, Exercise 1
+- Deviation from the guide: `dotnet new console` defaulted to `net9.0` (this machine's installed SDK),
+  but every other project in the solution (`Core`/`Web`) targets `net8.0` per `README.md`'s stated
+  stack — changed `<TargetFramework>` to `net8.0` for consistency; rebuilt clean afterward (0
+  errors/warnings) so this wasn't just a cosmetic edit
+- Verified: method/property names the guide's code assumes (`GetOrderAsync`, `CalculateSubtotal`,
+  `CalculateTotal`, `GetDiscountRate`, `GetCustomerOrdersAsync`, `IProductRepository.GetActiveAsync`,
+  and the `Order`/`Customer`/`Product`/`OrderItem` domain properties) checked against the actual
+  source before writing the tool class — all matched exactly, no adaptation needed; `dotnet build
+  src/OrderHub.Mcp` succeeds (0 errors, 0 warnings)
+- Not yet done: MCP Inspector testing (Exercise 2), `dotnet build`-only checked — the tools have not
+  been invoked live yet
+- Rollback: `git rm -r src/OrderHub.Mcp`, revert `OrderHub.sln`'s diff, `git revert <commit-hash>`
+  (post-commit); no other files touched
+
 ## Pending / next steps
 
 - [ ] Open a fresh Claude Code session with `training-repo` as the project root and run through the
