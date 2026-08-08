@@ -155,6 +155,44 @@ Claude Code（claude-sonnet-5）
      是「你」要親自看過，不能算 agent 自己審自己——**待你看一眼
      `git show 8510bd9`**
 
+### 第二階段 — MCP Server
+
+練習 0
+
+1. [ ] agent 能自己開瀏覽器完成操作並回傳截圖
+   - 尚未做——還沒接 Playwright MCP
+2. [ ] 回想活動 1 練習 2 的對比，記進 PROCESS.md
+   - 尚未做
+
+練習 1 — 建立 `OrderHub.Mcp`（stdio server，3 個唯讀工具）
+
+1. [x] `dotnet build src/OrderHub.Mcp` 成功
+   - `dotnet new console` 預設用了本機 SDK 的 `net9.0`，跟其餘專案（`net8.0`）不一致，
+     改回 `net8.0` 後重新build，0 錯誤 0 警告
+2. [x] 一個獨立 commit（訊息說明新增了哪些工具）
+   - `f490e06`：新增 `get_order`／`low_stock`／`customer_orders` 三個唯讀工具，
+     皆走 `IOrderService`／`IProductRepository`（不直接摸 `DbContext`，金額計算不重寫）
+
+練習 2 — 用 MCP Inspector 除錯
+
+1. [x] 三個工具都列得出來,且 description、參數說明如你所寫
+   - 2026-08-08 用 `npx @modelcontextprotocol/inspector --cli` 呼叫 `tools/list`：
+     三個工具都出現，名稱正確轉成 snake_case（`get_order`／`low_stock`／
+     `customer_orders`），description 與 inputSchema（含 `low_stock.threshold`
+     的 `default: 10`）都跟寫的一致
+2. [x] 手動呼叫 `LowStock`(threshold=10)，回傳的商品和 `/Products` 頁面上的低庫存商品一致
+   - CLI 呼叫 `low_stock` threshold=10：回傳 5 個商品（SKU-1048/1005/1023/1014/1032，
+     庫存 2/3/3/4/4），跟前面練習 2、3 手動實測 `/Products/LowStock` 頁面的結果**逐筆一致**
+   - 順手拿當時建的訂單 202 交叉核對 `get_order`：回傳的客戶（黃冠宇/Silver）、
+     商品（SKU-1021）、小計 1840、折扣率 0.05、總額 1748.00，跟頁面顯示完全一致
+3. [x] 呼叫 `GetOrder` 用一個不存在的 Id，回應是清楚的錯誤訊息而不是 exception dump
+   - CLI 呼叫 `get_order` id=999999：回傳 `"找不到訂單 999999"`，不是例外堆疊
+   - 備註：這次是用 **MCP Inspector 的 CLI 模式**（`--cli --method=tools/call ...`）
+     驗證的，不是瀏覽器版 Inspector 的 UI——瀏覽器工具這個 session 裡沒裝好；
+     CLI 模式測到的內容跟 UI 模式應該等價（都是呼叫同一個 `tools/list`／
+     `tools/call` JSON-RPC 方法），但如果你想眼睛看一次 Inspector 的網頁介面，
+     指令是 `npx @modelcontextprotocol/inspector dotnet run --project src/OrderHub.Mcp`
+
 ---
 
 ## 附錄：值得留下的對話片段

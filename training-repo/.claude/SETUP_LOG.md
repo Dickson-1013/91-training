@@ -135,6 +135,35 @@ subagent-dispatch behavior, not just the config files' contents:
 - Rollback: `git rm -r src/OrderHub.Mcp`, revert `OrderHub.sln`'s diff, `git revert <commit-hash>`
   (post-commit); no other files touched
 
+## Activity 2, Exercise 2 (2026-08-08): MCP Inspector verification (CLI mode)
+
+- What: verified all 3 tools using `npx @modelcontextprotocol/inspector --cli` against the built
+  `src/OrderHub.Mcp/bin/Debug/net8.0/OrderHub.Mcp.dll` (avoided `dotnet run --project` as the
+  target — its own `--project` flag collided with the inspector CLI's argument parser; running the
+  built DLL directly with no flags sidesteps that)
+  - `--method=tools/list` (note: `=` syntax required — `--method tools/list` as two separate argv
+    tokens gets swallowed into the variadic `target` capture instead of parsed as inspector's own
+    option, in every order tried) — all 3 tools listed, names/descriptions/inputSchema as written
+  - `tools/call low_stock threshold=10` — 5 products (SKU-1048/1005/1023/1014/1032, stock
+    2/3/3/4/4), matching the `/Products/LowStock` page results from the earlier Exercise 2/3
+    manual verification exactly
+  - `tools/call get_order id=202` — cross-checked against order 202 (created during that same
+    earlier verification): customer 黃冠宇/Silver, SKU-1021, subtotal 1840, discount 0.05,
+    total 1748.00, all matching the page
+  - `tools/call get_order id=999999` — returned `"找不到訂單 999999"`, not an exception dump
+  - `tools/call customer_orders customerId=3` — sanity check, returned a plausible order list
+    including order 202
+- Why: `documents/activities/activity-2-custom-mcp.md`, Exercise 2
+- Deviation from the guide: used Inspector's **CLI mode**, not the web UI it describes — the
+  claude-in-chrome browser tool wasn't installed in this session (user chose to continue without
+  it). CLI mode calls the same underlying `tools/list`/`tools/call` JSON-RPC methods, so the
+  verification is equivalent, but the user has not seen the actual Inspector web page — noted as
+  a caveat in `PROCESS.md` in case that visual walkthrough still matters to them
+- Housekeeping: stopped the earlier web-UI Inspector background process (was left running on
+  `localhost:6274`/`:51289` from before the CLI-mode pivot, unused)
+- Rollback: nothing persisted by this exercise — it only ran read-only MCP calls against the
+  already-committed Exercise 1 code; no files changed besides this log and `PROCESS.md`
+
 ## Pending / next steps
 
 - [ ] Open a fresh Claude Code session with `training-repo` as the project root and run through the
