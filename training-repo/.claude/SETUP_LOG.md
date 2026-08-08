@@ -281,6 +281,34 @@ subagent-dispatch behavior, not just the config files' contents:
   `cancel_order` MCP tool if this test order ever needs cleaning up (left as-is; harmless seed-like
   data, consistent with other test orders created earlier in this session)
 
+## Activity 3, 前置作業 (2026-08-08): Gemini API key setup
+
+- What: user obtained a Gemini API key themselves via Google AI Studio (their own Google login —
+  not something the agent can do, it's identity-bound); ran the guide's smoke test
+  (`Invoke-RestMethod` against `/v1/interactions`) themselves and confirmed success
+  - User initially pasted the key into chat wanting the agent to run the remaining steps. Its
+    format (`AQ.Ab8R...`, 52 chars) didn't match the classic Google API key pattern
+    (`AIzaSy...`, 39 chars) the agent expected, so the agent paused and asked the user to confirm
+    it came from AI Studio's actual "API keys" page rather than some other credential (e.g. an
+    OAuth token) before using it — user confirmed via a screenshot/text dump of that page showing
+    "Default Gemini API Key" ending in the same last 4 chars, project `gen-lang-client-0656309932`,
+    free tier. Proceeded on that confirmation.
+  - `dotnet user-secrets init --project src/OrderHub.Web` -> UserSecretsId
+    `5f1e3139-5762-4b51-8e61-49d45576ad57`
+  - `dotnet user-secrets set "Gemini:ApiKey" "..." --project src/OrderHub.Web` -> saved
+  - Verified the secret lives at `%APPDATA%\Microsoft\UserSecrets\5f1e3139-.../secrets.json` —
+    entirely outside the repo tree, so it can never be picked up by git regardless of
+    `.gitignore`
+  - Added `"Read(**/UserSecrets/**)"` to `.claude/settings.json`'s `deny` list (same spirit as the
+    existing `Read(**/*.pfx)` rule from Exercise 1's setup)
+- Why: `documents/activities/activity-3-gemini-api.md`, 前置作業 steps 5-6
+- Correction: told the user `dotnet user-secrets list` only shows the secret's *name*, not its
+  value — that's wrong, `list` does print the value. Only appeared in this session's own tool
+  output, never written to a committed file, but noting the correction here rather than letting it
+  stand uncorrected in the record
+- Rollback: `dotnet user-secrets remove "Gemini:ApiKey" --project src/OrderHub.Web` (or `clear` to
+  wipe all); revert the one `deny` line added to `settings.json`
+
 ## Pending / next steps
 
 - [ ] Open a fresh Claude Code session with `training-repo` as the project root and run through the

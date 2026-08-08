@@ -316,6 +316,31 @@ Claude Code（claude-sonnet-5）
      「該用哪個工具、該問什麼」的知識**進版控、可重複執行**,這個發現本身
      就是最好的示範
 
+### 第三階段 — Gemini API
+
+前置作業
+
+- [x] 申請Gemini API key、確認免費層、跑煙霧測試、設定user-secrets
+  - key是你自己去`aistudio.google.com`登入申請的(agent沒辦法代做這步——
+    需要你的Google帳號身分驗證,不是工具能力問題)
+  - 你自己跑`Invoke-RestMethod`煙霧測試,回報成功
+  - 一個小插曲：你一開始貼過來的key格式是`AQ.Ab8R...`(52字元),跟我印象裡
+    Google API key常見的`AIzaSy...`(39字元)格式不一樣,我先暫停沒直接拿去用,
+    請你回AI Studio確認——你貼了「API keys」頁面的截圖/文字,顯示「Default
+    Gemini API Key」結尾`...90rA`跟你給的key吻合,專案`gen-lang-client-
+    0656309932`、免費層級,確認是真的之後才繼續
+  - `dotnet user-secrets init` + `set "Gemini:ApiKey"`(UserSecretsId
+    `5f1e3139-5762-4b51-8e61-49d45576ad57`),存在`%APPDATA%\Microsoft\
+    UserSecrets\...\secrets.json`,repo目錄外,不會進git
+  - `.claude/settings.json`補了`"Read(**/UserSecrets/**)"`這條deny規則
+  - 小更正：我跟你說`dotnet user-secrets list`「不會印出key本身」,這句是
+    錯的,它其實會印出實際值——只出現在我自己的終端機輸出裡,沒有寫進任何
+    會commit的檔案,但記錄下來更正,不含混過去
+
+練習 1、2（自然語言查訂單 API + 網站頁面）
+
+- [ ] 尚未開始
+
 ---
 
 ## 附錄：值得留下的對話片段
